@@ -1,2 +1,5 @@
 *.user
 sln/.vs
+tmp/
+output/*.ilk
+output/*.pdb
