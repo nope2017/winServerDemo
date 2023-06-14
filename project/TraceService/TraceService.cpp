@@ -1,16 +1,23 @@
 ﻿#include <windows.h>
+#include <WinUser.h>
 #include <stdio.h>
 #include <iostream>
 #include <cstdio>
+#include <tchar.h>
+#include <thread>
+#include <future>
+#include <fstream>
+
+//日志收集 ： https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/networking/wireless-network-connectivity-issues-troubleshooting
 
 #define SERVICE_NAME L"Trace8021XLog"
 using namespace std;
 
 #pragma comment(lib,"Advapi32")
+#pragma comment(lib,"user32")
 
-SERVICE_STATUS        g_serviceStatus = { 0 };
-SERVICE_STATUS_HANDLE g_serviceStatusHandle = NULL;
-HANDLE                g_stopEvent = NULL;
+void writeFile(std::string strMsg);
+void writeFile(std::wstring strMsg);
 
 
 std::wstring stringToWstring(const std::string& str)
@@ -37,9 +44,8 @@ std::string execAndResponse(std::wstring strCmd)
 	sa.nLength = sizeof(sa);
 	sa.lpSecurityDescriptor = NULL;
 	sa.bInheritHandle = TRUE;
-
-	std::wstring strOutput;
-	std::string strRead;
+	//writeFile(L"run cmd:" + strCmd);
+	std::string strRead("recv msg:");
 	do
 	{
 		// 创建标准输出管道
@@ -76,7 +82,8 @@ std::string execAndResponse(std::wstring strCmd)
 		si.hStdError = pipe_err_write;
 
 		// 命令行命令
-
+		// 创建进程时禁用文件系统重定向
+		Wow64DisableWow64FsRedirection(NULL);
 		// 执行命令行命令
 		if (!CreateProcess(NULL, (LPWSTR)strCmd.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
 		{
@@ -144,10 +151,14 @@ std::string getTimeStamp()
 	return timestampStr;
 }
 
-int CreateFolder()
+int CreateFolder(bool btest = false)
 {
 	int ret = -1;
 	LPCWSTR folderName = L"C:\\MSLOG"; // 文件夹路径
+	if (btest)
+	{
+		folderName = L"C:\\MSLOG2";
+	}
 	DWORD result = GetFileAttributes(folderName);
 
 	if (result != INVALID_FILE_ATTRIBUTES && (result & FILE_ATTRIBUTE_DIRECTORY))
@@ -181,27 +192,85 @@ int CreateFolder()
 	return ret;
 }
 
-#define WIRELESS
+#define NETSH	L"C:\\Windows\\System32\\netsh.exe"
+
+#define LOG_CAPI2 0
+//#define WIRELESS
 #ifdef WIRELESS
-#define CMD_START_TRACE L"netsh trace start scenario=wlan,wlan_wpp,wlan_dbg,wireless_dbg globallevel=0xff capture=yes maxsize=1024 tracefile=C:\\MSLOG\\leagsoft_"
+#define CMD_START_TRACE L"C:\\Windows\\System32\\netsh.exe trace start scenario=wlan,wlan_wpp,wlan_dbg,wireless_dbg globallevel=0xff capture=yes maxsize=1024 tracefile=C:\\MSLOG\\leagsoft_"
 #else
-#define CMD_START_TRACE L"netsh trace start scenario=lan globallevel=0xff capture=yes maxsize=1024 tracefile=C:\\MSLOG\\leagsoft_"
+#define CMD_START_TRACE L"C:\\Windows\\System32\\netsh.exe trace start scenario=lan globallevel=0xff capture=yes maxsize=1024 tracefile=\"C:\\MSLOG\\leagsoft_"
 #endif
+
+void writeFile(std::wstring strMsg)
+{
+	std::wofstream ofs;
+	ofs.open("C:\\MSLOG\\log.txt", std::ios_base::app);
+	if (ofs.is_open()) {
+		ofs << strMsg.c_str() << std::endl;
+		ofs.close();
+
+		std::cout << "Successfully wrote to file." << std::endl;
+	}
+}
+
+void writeFile(std::string strMsg)
+{
+	std::ofstream ofs;
+	ofs.open("C:\\MSLOG\\log.txt", std::ios_base::app);
+	if (ofs.is_open()) {  
+		ofs << strMsg.c_str() << std::endl;
+		ofs.close();    
+
+		std::cout << "Successfully wrote to file." << std::endl;
+	}
+}
+
+void writeError(std::string strMsg)
+{
+	std::ofstream ofs;
+	ofs.open("C:\\MSLOG\\error.txt", std::ios_base::app);
+	if (ofs.is_open()) {
+		ofs << strMsg.c_str() << std::endl;
+		ofs.close();
+
+		std::cout << "Successfully wrote to file." << std::endl;
+	}
+	else
+	{
+		std::ofstream ofs("C:\\MSLOG\\failed open error.txt");
+	}
+}
+
+int g_cout = 0;
 int runTrace()
 {
 	//AdjustPrivilege();
 	CreateFolder();
-	std::wstring cmd1(L"netsh ras set tracing * enabled");
+	std::wstring cmd1(NETSH + std::wstring(L" ras set tracing * enabled"));
 	std::string strMsg = execAndResponse(cmd1);
 	std::cout << "recv msg:" << std::endl;
 	std::cout << strMsg.c_str();
 
 	std::wstring cmd2(CMD_START_TRACE);
 	cmd2 += stringToWstring(getTimeStamp()) + L"_wireless_cli.etl";
+	//std::wstring strCount;
+	//wchar_t buf[16];
+	//wsprintf(buf,L"%d", g_cout++);
+	//cmd2 += std::wstring(buf) + L"_wireless_cli.etl\"";
+	//writeFile(cmd2);
+	strMsg.clear();
 	strMsg = execAndResponse(cmd2);
-	std::cout << "recv msg2:" << std::endl;
-	std::cout << strMsg.c_str();
-#ifndef WIRELESS
+	writeFile(strMsg);
+	if (strMsg.find("找不到下列命令") != -1)
+	{
+		strMsg.clear();
+		strMsg = execAndResponse(L"netsh -h");
+		writeFile(strMsg);
+	}
+	
+
+#if LOG_CAPI2
 	std::wstring cmd3(L"wevtutil.exe sl Microsoft-Windows-CAPI2/Operational /e:true");
 	strMsg = execAndResponse(cmd3);
 	std::cout << "recv msg2:" << std::endl;
@@ -217,12 +286,12 @@ int runTrace()
 
 void stopTrace()
 {
-	std::wstring cmd3(L"netsh trace stop");
+	std::wstring cmd3(std::wstring(NETSH) + L" trace stop");
 	std::string strMsg = execAndResponse(cmd3);
 
-	cmd3 = (L"netsh ras set tracing * disabled");
+	cmd3 = (std::wstring(NETSH) + L" ras set tracing * disabled");
 	strMsg = execAndResponse(cmd3);
-#ifndef WIRELESS
+#if LOG_CAPI2
 	//禁用并复制 CAPI2 日志
 	cmd3 = (L"wevtutil sl Microsoft-Windows-CAPI2/Operational /e:false");
 	strMsg = execAndResponse(cmd3);
@@ -233,7 +302,200 @@ void stopTrace()
 #endif
 }
 
-void WINAPI ServiceMain(DWORD argc, LPTSTR* argv);
+SERVICE_STATUS        g_ServiceStatus = { 0 };
+SERVICE_STATUS_HANDLE g_StatusHandle = NULL;
+HANDLE                g_ServiceStopEvent = INVALID_HANDLE_VALUE;
+
+VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv);
+VOID WINAPI ServiceCtrlHandler(DWORD);
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
+
+#define SERVICE_NAME  _T("Trace8021XLog")
+
+int _tmain(int argc, TCHAR *argv[])
+{
+	OutputDebugString(_T("Trace8021XLog Service: Main: Entry"));
+
+	SERVICE_TABLE_ENTRY ServiceTable[] =
+	{
+		{(LPWSTR)SERVICE_NAME, (LPSERVICE_MAIN_FUNCTION)ServiceMain},
+		{NULL, NULL}
+	};
+
+	if (StartServiceCtrlDispatcher(ServiceTable) == FALSE)
+	{
+		OutputDebugString(_T("Trace8021XLog: Main: StartServiceCtrlDispatcher returned error"));
+		return GetLastError();
+	}
+
+	OutputDebugString(_T("Trace8021XLog: Main: Exit"));
+	return 0;
+}
+
+
+VOID WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
+{
+	DWORD Status = E_FAIL;
+	HANDLE hThread = NULL;
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Entry"));
+
+	g_StatusHandle = RegisterServiceCtrlHandler(SERVICE_NAME, ServiceCtrlHandler);
+
+	if (g_StatusHandle == NULL)
+	{
+		OutputDebugString(_T("Trace8021XLog: ServiceMain: RegisterServiceCtrlHandler returned error"));
+		goto EXIT;
+	}
+
+	// Tell the service controller we are starting
+	ZeroMemory(&g_ServiceStatus, sizeof(g_ServiceStatus));
+	g_ServiceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+	g_ServiceStatus.dwControlsAccepted = 0;
+	g_ServiceStatus.dwCurrentState = SERVICE_START_PENDING;
+	g_ServiceStatus.dwWin32ExitCode = 0;
+	g_ServiceStatus.dwServiceSpecificExitCode = 0;
+	g_ServiceStatus.dwCheckPoint = 0;
+
+	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+	{
+		OutputDebugString(_T("Trace8021XLog: ServiceMain: SetServiceStatus returned error"));
+	}
+
+	/*
+	 * Perform tasks neccesary to start the service here
+	 */
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Performing Service Start Operations"));
+
+	// Create stop event to wait on later.
+	g_ServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (g_ServiceStopEvent == NULL)
+	{
+		OutputDebugString(_T("Trace8021XLog: ServiceMain: CreateEvent(g_ServiceStopEvent) returned error"));
+
+		g_ServiceStatus.dwControlsAccepted = 0;
+		g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+		g_ServiceStatus.dwWin32ExitCode = GetLastError();
+		g_ServiceStatus.dwCheckPoint = 1;
+
+		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+		{
+			OutputDebugString(_T("Trace8021XLog: ServiceMain: SetServiceStatus returned error"));
+		}
+		goto EXIT;
+	}
+
+	// Tell the service controller we are started
+	g_ServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+	g_ServiceStatus.dwCurrentState = SERVICE_RUNNING;
+	g_ServiceStatus.dwWin32ExitCode = 0;
+	g_ServiceStatus.dwCheckPoint = 0;
+
+	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+	{
+		OutputDebugString(_T("Trace8021XLog: ServiceMain: SetServiceStatus returned error"));
+	}
+
+	// Start the thread that will perform the main task of the service
+	hThread = CreateThread(NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
+
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Waiting for Worker Thread to complete"));
+
+	// Wait until our worker thread exits effectively signaling that the service needs to stop
+	WaitForSingleObject(hThread, INFINITE);
+
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Worker Thread Stop Event signaled"));
+
+
+	/*
+	 * Perform any cleanup tasks
+	 */
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Performing Cleanup Operations"));
+
+	CloseHandle(g_ServiceStopEvent);
+
+	g_ServiceStatus.dwControlsAccepted = 0;
+	g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+	g_ServiceStatus.dwWin32ExitCode = 0;
+	g_ServiceStatus.dwCheckPoint = 3;
+
+	if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+	{
+		OutputDebugString(_T("Trace8021XLog: ServiceMain: SetServiceStatus returned error"));
+	}
+
+EXIT:
+	OutputDebugString(_T("Trace8021XLog: ServiceMain: Exit"));
+
+	return;
+}
+
+
+VOID WINAPI ServiceCtrlHandler(DWORD CtrlCode)
+{
+	OutputDebugString(_T("Trace8021XLog: ServiceCtrlHandler: Entry"));
+	bool bNeedStopTrace = false;
+	switch (CtrlCode)
+	{
+	case SERVICE_CONTROL_STOP:
+
+		OutputDebugString(_T("Trace8021XLog: ServiceCtrlHandler: SERVICE_CONTROL_STOP Request"));
+
+		if (g_ServiceStatus.dwCurrentState != SERVICE_RUNNING)
+			break;
+
+		/*
+		 * Perform tasks neccesary to stop the service here
+		 */
+
+		g_ServiceStatus.dwControlsAccepted = 0;
+		g_ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+		g_ServiceStatus.dwWin32ExitCode = 0;
+		g_ServiceStatus.dwCheckPoint = 4;
+
+		if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+		{
+			OutputDebugString(_T("Trace8021XLog: ServiceCtrlHandler: SetServiceStatus returned error"));
+		}
+
+		// This will signal the worker thread to start shutting down
+		SetEvent(g_ServiceStopEvent);
+
+		break;
+	case SERVICE_CONTROL_CONTINUE:
+		OutputDebugString(_T("Trace8021XLog: ServiceCtrlHandler: continue..."));
+		break;
+	default:
+		break;
+	}
+	OutputDebugString(_T("Trace8021XLog: ServiceCtrlHandler: Exit"));
+}
+
+
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
+{
+	OutputDebugString(_T("Trace8021XLog: ServiceWorkerThread: Entry"));
+	runTrace();
+	//  Periodically check if the service has been requested to stop
+	while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0)
+	{
+		/*
+		 * Perform main service function here
+		 */
+
+		 //  Simulate some work by sleeping
+		Sleep(3000);
+	}
+	stopTrace();
+	OutputDebugString(_T("Trace8021XLog: ServiceWorkerThread: Exit"));
+
+	return ERROR_SUCCESS;
+}
+
+/*
+
+SERVICE_STATUS        g_serviceStatus = { 0 };
+SERVICE_STATUS_HANDLE g_serviceStatusHandle = NULL;
+HANDLE                g_stopEvent = NULL;
 
 // 服务控制函数
 void WINAPI ServiceControlHandler(DWORD controlCode)
@@ -250,6 +512,7 @@ void WINAPI ServiceControlHandler(DWORD controlCode)
 		SetEvent(g_stopEvent);
 		break;
 	case SERVICE_CONTROL_CONTINUE:
+		OutputDebugString(_T("Trace8021XLog: SERVICE_CONTROL_CONTINUE: continue..."));
 		break;
 	default:
 		// 其他未处理的控制码
@@ -321,3 +584,4 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR* argv)
 	// 关闭事件句柄
 	CloseHandle(g_stopEvent);
 }
+*/

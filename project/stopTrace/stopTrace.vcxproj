@@ -79,6 +79,7 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\..\output</OutDir>
     <IntDir>$(SolutionDir)\..\tmp\$(Configuration)\</IntDir>
+    <TargetName>removeTrace</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -115,6 +116,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

@@ -97,7 +97,14 @@ int regSc()
 	}
 
 	std::cout << "Service created successfully" << std::endl;
-
+	//启动服务
+	if (!StartService(hService, 0, NULL))
+	{
+		// 处理启动服务失败的情况
+		CloseServiceHandle(hService);
+		CloseServiceHandle(hService);
+		return -1;
+	}
 	CloseServiceHandle(hService);
 	CloseServiceHandle(hSCManager);
 

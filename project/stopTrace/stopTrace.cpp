@@ -166,7 +166,7 @@ void stopAndRemoveTraceService()
 				while (QueryServiceStatus(schService, &m_ssStatus)) {
 					if (m_ssStatus.dwCurrentState == SERVICE_STOP_PENDING) {
 						printf(("."));
-						Sleep(10);
+						Sleep(50);
 					}
 					else
 						break;
