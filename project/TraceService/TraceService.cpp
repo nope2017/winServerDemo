@@ -254,11 +254,6 @@ int runTrace()
 
 	std::wstring cmd2(CMD_START_TRACE);
 	cmd2 += stringToWstring(getTimeStamp()) + L"_wireless_cli.etl";
-	//std::wstring strCount;
-	//wchar_t buf[16];
-	//wsprintf(buf,L"%d", g_cout++);
-	//cmd2 += std::wstring(buf) + L"_wireless_cli.etl\"";
-	//writeFile(cmd2);
 	strMsg.clear();
 	strMsg = execAndResponse(cmd2);
 	writeFile(strMsg);

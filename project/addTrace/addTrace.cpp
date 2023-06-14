@@ -18,7 +18,7 @@ std::wstring getPath()
 	if (lastDelimiter != NULL) {
 		*lastDelimiter = '\0';
 	}
-	return strExeFullDir;
+	return std::wstring(strExeFullDir)+L"\\";
 }
 
 //设置当前程序开机启动
@@ -61,6 +61,13 @@ bool AutoPowerOn()
 	return bRet;
 }
 
+#define WIRELESS 0
+#if WIRELESS
+#define SERVICE_EXE_NAME  L"TraceService-wireless.exe"
+#else 
+#define SERVICE_EXE_NAME  L"TraceService-wired.exe"
+#endif
+
 int regSc()
 {
 	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
@@ -70,13 +77,13 @@ int regSc()
 		return 1;
 	}
 	std::wstring strPath = getPath();
-	strPath.append(L"\\TraceService.exe");
+	strPath.append(SERVICE_EXE_NAME);
 	const wchar_t* szServiceName = L"trace 802 service";
 
 	SC_HANDLE hService = CreateService(
 		hSCManager,
 		szServiceName,
-		szServiceName,
+		L"log 802 auth",
 		SERVICE_ALL_ACCESS,
 		SERVICE_WIN32_OWN_PROCESS,
 		SERVICE_AUTO_START,
