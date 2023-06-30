@@ -79,7 +79,7 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\..\output</OutDir>
     <IntDir>$(SolutionDir)\..\tmp\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)-wired</TargetName>
+    <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>

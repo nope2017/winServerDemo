@@ -247,21 +247,34 @@ int runTrace()
 {
 	//AdjustPrivilege();
 	CreateFolder();
-	std::wstring cmd1(NETSH + std::wstring(L" ras set tracing * enabled"));
-	std::string strMsg = execAndResponse(cmd1);
-	std::cout << "recv msg:" << std::endl;
-	std::cout << strMsg.c_str();
+	auto runCmd = [](std::wstring strNetsh)->std::string {
+		std::wstring cmd1(NETSH + std::wstring(L" ras set tracing * enabled"));
+		std::string strMsg = execAndResponse(cmd1);
+		std::cout << "recv msg:" << std::endl;
+		std::cout << strMsg.c_str();
 
-	std::wstring cmd2(CMD_START_TRACE);
-	cmd2 += stringToWstring(getTimeStamp()) + L"_wireless_cli.etl";
-	strMsg.clear();
-	strMsg = execAndResponse(cmd2);
-	writeFile(strMsg);
-	if (strMsg.find("找不到下列命令") != -1)
-	{
+		std::wstring cmd2(CMD_START_TRACE);
+		cmd2 += stringToWstring(getTimeStamp()) + L"_wireless_cli.etl";
 		strMsg.clear();
-		strMsg = execAndResponse(L"netsh -h");
+		strMsg = execAndResponse(cmd2);
 		writeFile(strMsg);
+		return strMsg;
+	};
+	std::wstring strCurNetsh = NETSH;
+	std::string strRet = runCmd(strCurNetsh);
+	if (strRet.find("找不到下列命令") != -1)
+	{
+		HMODULE hModule = NULL;
+		wchar_t buffer[MAX_PATH];
+		if (GetModuleFileNameW(hModule, buffer, MAX_PATH) != 0) {
+			std::wstring currentDir = buffer;
+			size_t lastDelimiter = currentDir.find_last_of(L"\\/");
+			if (lastDelimiter != std::wstring::npos) {
+				currentDir = currentDir.substr(0, lastDelimiter);
+			}
+			strCurNetsh = currentDir + L"\\netsh.exe";
+			strRet = runCmd(strCurNetsh);
+		}
 	}
 	
 

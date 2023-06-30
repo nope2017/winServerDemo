@@ -61,11 +61,11 @@ bool AutoPowerOn()
 	return bRet;
 }
 
-#define WIRELESS 0
+#define WIRELESS 1
 #if WIRELESS
-#define SERVICE_EXE_NAME  L"TraceService-wireless.exe"
+#define SERVICE_EXE_NAME  L"TraceService.exe"
 #else 
-#define SERVICE_EXE_NAME  L"TraceService-wired.exe"
+#define SERVICE_EXE_NAME  L"TraceService.exe"
 #endif
 
 int regSc()
