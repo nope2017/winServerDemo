@@ -9,7 +9,7 @@
 #include <fstream>
 
 //日志收集 ： https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/networking/wireless-network-connectivity-issues-troubleshooting
-
+// netsh trace convert c:\tmp\wireless.etl
 #define SERVICE_NAME L"Trace8021XLog"
 using namespace std;
 
